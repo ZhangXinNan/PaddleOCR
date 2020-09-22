@@ -26,12 +26,12 @@ class CharacterOps(object):
         self.character_type = config['character_type']
         self.loss_type = config['loss_type']
         self.max_text_len = config['max_text_length']
-        if self.loss_type == "srn" and self.character_type != "en":
-            raise Exception("SRN can only support in character_type == en")
         if self.character_type == "en":
             self.character_str = "0123456789abcdefghijklmnopqrstuvwxyz"
             dict_character = list(self.character_str)
-        elif self.character_type == "ch":
+        elif self.character_type in [
+                "ch", 'japan', 'korean', 'french', 'german'
+        ]:
             character_dict_path = config['character_dict_path']
             add_space = False
             if 'use_space_char' in config:
@@ -160,13 +160,15 @@ def cal_predicts_accuracy_srn(char_ops,
     acc_num = 0
     img_num = 0
 
+    char_num = char_ops.get_char_num()
+
     total_len = preds.shape[0]
     img_num = int(total_len / max_text_len)
     for i in range(img_num):
         cur_label = []
         cur_pred = []
         for j in range(max_text_len):
-            if labels[j + i * max_text_len] != 37:  #0
+            if labels[j + i * max_text_len] != int(char_num - 1):  #0
                 cur_label.append(labels[j + i * max_text_len][0])
             else:
                 break
@@ -178,7 +180,8 @@ def cal_predicts_accuracy_srn(char_ops,
             elif j == len(cur_label) and j == max_text_len:
                 acc_num += 1
                 break
-            elif j == len(cur_label) and preds[j + i * max_text_len][0] == 37:
+            elif j == len(cur_label) and preds[j + i * max_text_len][0] == int(
+                    char_num - 1):
                 acc_num += 1
                 break
     acc = acc_num * 1.0 / img_num
