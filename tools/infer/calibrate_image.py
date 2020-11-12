@@ -262,6 +262,8 @@ def rectify_img(img, boxes, debug=False):
 
 
 def calibrate_img(text_detector, img, image_file, out_dir, debug=False):
+    '''假设大部分是横向书写的文本框。
+    '''
     # 1 通过多次旋转图片，初步找到旋转角度
     img1, boxes1, theta1, score1 = rotate_first(text_detector, img)
     if debug:

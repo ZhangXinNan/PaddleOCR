@@ -2,7 +2,8 @@ import os
 import sys
 __dir__ = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(__dir__)
-from line_seg import LineSeg
+from line_seg import LineSeg, get_y_from_line, get_line_vertical, get_cross_point_by_param
+import line_seg
 sys.path.append(os.path.abspath(os.path.join(__dir__, '../..')))
 
 import cv2
@@ -26,7 +27,7 @@ from ppocr.postprocess.east_postprocess import EASTPostPocess
 from ppocr.postprocess.sast_postprocess import SASTPostProcess
 
 import tools.infer.predict_det as predict_det
-from calibrate_image import get_rotated_size, check_box_score, get_box_length, length
+from calibrate_image import get_rotated_size, check_box_score, get_box_length, get_rotated_radian
 # from calibrate_image import rotate_image, rotate_first
 _debug = True
 _out_dir = './inference_results'
@@ -192,50 +193,10 @@ def line_infer(line, x):
     return round(y)
 
 
-def calibrate_img2(text_detector, img):
-    """
-    """
-    # 1 通过多次旋转图片，初步找到旋转角度
-    img1, boxes1, theta1, score1, img_box1 = rotate_first2(text_detector, img)
-    if _debug:
-        print('img_box1 : ', img_box1, type(img_box1))
-        rotate_angle1 = math.degrees(theta1)
-        logger.debug("第一次旋转：文本框数量1：{}，旋转角度1：{}, score1: {}".format(len(boxes1), rotate_angle1, score1))
-        new_filename = "{}.10-rotate.{}.{}.jpg".format(_img_base_name, int(rotate_angle1), int(score1))
-        cv2.imwrite(os.path.join(_out_dir, new_filename), utility.draw_text_det_res2(boxes1, img1))
-    if len(boxes1) < 4:
-        return img1, boxes1, theta1, score1, img_box1
-
-    # 2 找出非文本有效区域
-    img_mask = get_img_mask(img1, img_box1, boxes1)
-    # 找出文本框的有效直线
-    lines_valid_text_box, box_height_avg = get_lines_by_box(boxes1)
-    if _debug:
-        drawn_img = img1.copy()
-        for line in lines_valid_text_box:
-            print(line, type(line))
-            cv2.line(drawn_img, tuple(line[0][:2]), tuple(line[0][2:4]), (255, 0, 0), 2)
-        new_filename = "{}.21-lines_text-box.png".format(_img_base_name)
-        cv2.imwrite(os.path.join(_out_dir, new_filename), drawn_img)
-    # 找出fld的有效直线
-    lines_valid_fld = get_lines_by_ld(img1, img_mask, box_height_avg)
-    # 有效的横线、有效的竖线
-    lines_valid_hor, lines_valid_ver = [], []
-    lines_valid_hor, lines_valid_ver = lines_split_by_direction(lines_valid_fld, lines_valid_hor, lines_valid_ver)
-    lines_valid_hor, lines_valid_ver = lines_split_by_direction(lines_valid_text_box, lines_valid_hor, lines_valid_ver)
-    if _debug:
-        print("lines_valid_hor : ", lines_valid_hor)
-        print("lines_valid_ver : ", lines_valid_ver)
-        drawn_img = img1.copy()
-        for line in lines_valid_hor:
-            cv2.line(drawn_img, tuple(line[0][:2]), tuple(line[0][2:4]), (255, 0, 0), 2)
-        for line in lines_valid_ver:
-            cv2.line(drawn_img, tuple(line[0][:2]), tuple(line[0][2:4]), (0, 255, 0), 2)
-        cv2.imwrite(os.path.join(_out_dir, _img_base_name + '.23.lines_hor_ver.png'), drawn_img)
-
-    h, w = img1.shape[:2]
-    lineseg_center_cross_x_min = w - 1
-    lineseg_center_cross_x_max = 0
+def rectify_img2(img, boxes, lines_valid_hor, lines_valid_ver):
+    h, w = img.shape[:2]
+    # lineseg_center_cross_x_min = w - 1
+    # lineseg_center_cross_x_max = 0
     lineseg_center_cross_y_min = h - 1
     lineseg_center_cross_y_max = 0
     slope_hor_list, slope_ver_list = [], []
@@ -245,29 +206,29 @@ def calibrate_img2(text_detector, img):
         # 横线与中竖线交点
         line_seg = LineSeg(x1, y1, x2, y2)
         cross_pt_hor = line_seg.get_cross_point(LineSeg(w / 2, 0, w / 2, h - 1))
-        # theta_hor.append([cross_pt_hor[1], 100 * math.degrees(math.atan((y1 - y2) / (x1 - x2)))])
         slope_hor_list.append([cross_pt_hor[1], 10000 * (y2 - y1) / (x2 - x1)])
         if cross_pt_hor[1] > lineseg_center_cross_y_max:
             lineseg_center_cross_y_max = cross_pt_hor[1]
         if cross_pt_hor[1] < lineseg_center_cross_y_min:
             lineseg_center_cross_y_min = cross_pt_hor[1]
+    '''
     for line in lines_valid_ver:
         x1, y1, x2, y2 = line[0]
         # 竖线与中横线交点
         cross_pt_ver = LineSeg(0, h / 2, w - 1, h / 2).get_cross_point(LineSeg(x1, y1, x2, y2))
-        # theta_ver.append([cross_pt_ver[0], 100 * math.degrees(math.atan((x1 - x2) / (y1 - y2)))])
         slope_ver_list.append([cross_pt_ver[0], 10000 * (x2 - x1) / (y2 - y1)])
         if cross_pt_ver[0] > lineseg_center_cross_x_max:
             lineseg_center_cross_x_max = cross_pt_ver[0]
         if cross_pt_ver[0] < lineseg_center_cross_x_min:
             lineseg_center_cross_x_min = cross_pt_ver[0]
+    '''
     print("斜率统计结果：")
     print(slope_hor_list)
     print(slope_ver_list)
 
-    line_top, line_bottom, line_left, line_right = None, None, None, None
     line_top_left, line_top_right = None, None
     line_bot_left, line_bot_right = None, None
+    line_middle_left, line_middle_right = None, None
     line_left_top, line_left_bot = None, None
     line_right_top, line_right_bot = None, None
     if len(slope_hor_list) > 2:
@@ -277,16 +238,35 @@ def calibrate_img2(text_detector, img):
         print('slope_hor_line : ', slope_hor_line)
         line_top_pt = (w / 2, lineseg_center_cross_y_min)
         line_bottom_pt = (w / 2, lineseg_center_cross_y_max)
+        line_middle_pt = (w / 2, (lineseg_center_cross_y_min + lineseg_center_cross_y_max) / 2)
         print(line_top_pt, line_bottom_pt)
         # print(theta_top, theta_bot)
         slope_top = line_infer(slope_hor_line, line_top_pt[1]) / 10000
         slope_bot = line_infer(slope_hor_line, line_bottom_pt[1]) / 10000
+        slope_mid = (slope_top + slope_bot) / 2
         line_top = (-1.0 * slope_top, 1.0, w / 2 * slope_top - line_top_pt[1])
         line_bottom = (-1.0 * slope_bot, 1.0, w / 2 * slope_bot - line_bottom_pt[1])
+        line_middle = (-1.0 * slope_mid, 1.0, w / 2 * slope_mid - line_middle_pt[1])
         line_top_left = LineSeg(0, 0, 0, h - 1).get_cross_point_by_param(*line_top)
-        line_top_right = LineSeg(w-1, 0, w-1, h-1).get_cross_point_by_param(*line_top)
+        line_top_right = LineSeg(w - 1, 0, w - 1, h - 1).get_cross_point_by_param(*line_top)
         line_bot_left = LineSeg(0, 0, 0, h - 1).get_cross_point_by_param(*line_bottom)
-        line_bot_right = LineSeg(w-1, 0, w-1, h-1).get_cross_point_by_param(*line_bottom)
+        line_bot_right = LineSeg(w - 1, 0, w - 1, h - 1).get_cross_point_by_param(*line_bottom)
+        line_middle_left = LineSeg(0, 0, 0, h - 1).get_cross_point_by_param(*line_middle)
+        line_middle_right = LineSeg(w - 1, 0, w - 1, h - 1).get_cross_point_by_param(*line_middle)
+        text_min_x, text_max_x = np.min(boxes[:, :, 0]), np.max(boxes[:, :, 0])
+        line_middle_left_pt = (text_min_x, get_y_from_line(*line_middle, text_min_x))
+        line_middle_right_pt = (text_max_x, get_y_from_line(*line_middle, text_max_x))
+        line_left_param = get_line_vertical(*line_middle, line_middle_left_pt)
+        line_right_param = get_line_vertical(*line_middle, line_middle_right_pt)
+        # line_left_top = LineSeg(0, 0, w-1, 0).get_cross_point_by_param(*line_left_param)
+        # line_left_bot = LineSeg(0, h-1, w-1, h-1).get_cross_point_by_param(*line_left_param)
+        # line_right_top = LineSeg(0, 0, w - 1, 0).get_cross_point_by_param(*line_right_param)
+        # line_right_bot = LineSeg(0, h - 1, w - 1, h - 1).get_cross_point_by_param(*line_right_param)
+        line_left_top = get_cross_point_by_param(*line_top, *line_left_param)
+        line_left_bot = get_cross_point_by_param(*line_bottom, *line_left_param)
+        line_right_top = get_cross_point_by_param(*line_top, *line_right_param)
+        line_right_bot = get_cross_point_by_param(*line_bottom, *line_right_param)
+    '''
     if len(slope_ver_list) > 2:
         # theta_ver_line = cv2.fitLine(np.array(theta_ver), cv2.DIST_L1, 0, 0.01, 0.01)
         slope_ver_line = cv2.fitLine(np.array(slope_ver_list), cv2.DIST_L2, 0, 0.01, 0.01)
@@ -305,20 +285,138 @@ def calibrate_img2(text_detector, img):
         line_left_bot = LineSeg(0, h-1, w - 1, h - 1).get_cross_point_by_param(*line_left)
         line_right_top = LineSeg(0, 0, w-1, 0).get_cross_point_by_param(*line_right)
         line_right_bot = LineSeg(0, h-1, w-1, h - 1).get_cross_point_by_param(*line_right)
+    '''
     if _debug:
-        drawn_img = img1.copy()
+        drawn_img = img.copy()
         print('slope_top, slope_bot : ')
         print(slope_top, slope_bot)
         if line_top_left is not None and line_top_right is not None:
             cv2.line(drawn_img, line_top_left, line_top_right, (255, 0, 0), 2)
         if line_bot_left is not None and line_bot_right is not None:
             cv2.line(drawn_img, line_bot_left, line_bot_right, (0, 255, 0), 2)
+            if line_top_left is not None and line_top_right is not None:
+                x1 = round((line_top_left[0] + line_bot_left[0]) / 2)
+                y1 = round((line_top_left[1] + line_bot_left[1]) / 2)
+                x2 = round((line_top_right[0] + line_bot_right[0]) / 2)
+                y2 = round((line_top_right[1] + line_bot_right[1]) / 2)
+                cv2.line(drawn_img, (x1, y1), (x2, y2), (255, 255, 0), 4)
+        if line_middle_left is not None and line_middle_right is not None:
+            cv2.line(drawn_img, line_middle_left, line_middle_right, (0, 0, 255), 4)
         if line_left_top is not None and line_left_bot is not None:
-            cv2.line(drawn_img, line_left_top, line_left_bot, (0, 0, 255), 2)
+            cv2.line(drawn_img, line_left_top, line_left_bot, (255, 0, 255), 2)
         if line_right_top is not None and line_right_bot is not None:
             cv2.line(drawn_img, line_right_top, line_right_bot, (0, 255, 255), 2)
-        cv2.imwrite(os.path.join(_out_dir, "{}.31.top_bot.png".format(_img_base_name)),
-                    drawn_img)
+        cv2.imwrite(os.path.join(_out_dir, "{}.41.top_bot.png".format(_img_base_name)), drawn_img)
+    # if line_left_top is not None and line_left_bot is not None and line_right_top is not None and line_right_bot:
+    #     return np.array([line_left_top, line_right_top, line_right_bot, line_left_bot]).astype(np.int)
+    # return np.array([[0, 0], [w, 0], [w, h], [0, h]])
+    return line_left_top, line_right_top, line_right_bot, line_left_bot
+
+
+def calibrate_img2(text_detector, img):
+    """假设大部分是横向书写的文本框。
+    """
+    # 1 通过多次旋转图片，初步找到旋转角度
+    img1, boxes1, theta1, score1, img_box1 = rotate_first2(text_detector, img)
+    if _debug:
+        print('img_box1 : ', img_box1, type(img_box1))
+        rotate_angle1 = math.degrees(theta1)
+        logger.debug("第一次旋转：文本框数量1：{}，旋转角度1：{}, score1: {}".format(len(boxes1), rotate_angle1, score1))
+        new_filename = "{}.10-rotate.{}.{}.jpg".format(_img_base_name, int(rotate_angle1), int(score1))
+        cv2.imwrite(os.path.join(_out_dir, new_filename), utility.draw_text_det_res2(boxes1, img1))
+    if len(boxes1) < 4:
+        return img1, boxes1, theta1, score1, img_box1
+
+    # 2 计算文本框旋转角度
+    theta_delta = get_rotated_radian(boxes1.reshape((-1, 8)).tolist())
+    theta2 = theta1 + theta_delta
+    if _debug:
+        rotate_angle2 = math.degrees(theta2)
+        logger.debug("判断图像的旋转方向 {} {} {} {}".format(theta1, theta_delta, theta2, rotate_angle2))
+
+    img2, img_box2 = rotate_image2(img, theta2)
+    boxes2, elapse2 = text_detector(img2)
+    score2 = check_box_score(boxes2)
+    if _debug:
+        logger.debug("第二次旋转:boxes2:{}, 旋转角度2：{}， score2:{}".format(len(boxes2), rotate_angle2, score2))
+        logger.debug("img_box2:{}".format(img_box2))
+        new_filename = "{}.20-rotate.{}.{}.jpg".format(_img_base_name, int(rotate_angle2), int(score2))
+        cv2.imwrite(os.path.join(_out_dir, new_filename), utility.draw_text_det_res2(boxes2, img2))
+        print("boxes2 : {} {} {}".format(type(boxes2), boxes2.shape, boxes2))
+        x1, x2 = int(np.min(boxes2[:, :, 0])), int(np.max(boxes2[:, :, 0]))
+        y1, y2 = int(np.min(boxes2[:, :, 1])), int(np.max(boxes2[:, :, 1]))
+        print("boxes2 : x1,y1,x2,y2 {} {} {} {}".format(x1, y1, x2, y2))
+        x1 = max(0, x1 - int((x2 - x1) / 10))
+        y1 = max(0, y1 - int((y2 - y1) / 10))
+        x2 = min(x2 + int((x2 - x1) / 10), img2.shape[1] - 1)
+        y2 = min(y2 + int((y2 - y1) / 10), img2.shape[0] - 1)
+        new_filename = "{}.21-rotate.{}.{}.jpg".format(_img_base_name, int(rotate_angle2), int(score2))
+        cv2.imwrite(os.path.join(_out_dir, new_filename), utility.draw_text_det_res2(boxes2, img2)[y1:y2, x1:x2])
+    if len(boxes2) < 4:
+        if score2 >= score1:
+            return img2, boxes2, theta2, score2, img_box2
+        elif score1 > score2:
+            return img1, boxes1, theta1, score1, img_box1
+
+    # 3 找出文本框的有效直线
+    lines_valid_text_box, box_height_avg = get_lines_by_box(boxes2)
+    if _debug:
+        drawn_img = img2.copy()
+        for line in lines_valid_text_box:
+            # print(line, type(line))
+            cv2.line(drawn_img, tuple(line[0][:2]), tuple(line[0][2:4]), (255, 0, 0), 2)
+        new_filename = "{}.31-lines_text-box.png".format(_img_base_name)
+        cv2.imwrite(os.path.join(_out_dir, new_filename), drawn_img)
+    # 找出fld的有效直线
+    # img_mask = get_img_mask(img2, img_box2, boxes2)
+    # lines_valid_fld = get_lines_by_ld(img2, img_mask, box_height_avg)
+    # 有效的横线、有效的竖线
+    lines_valid_hor, lines_valid_ver = [], []
+    # lines_valid_hor, lines_valid_ver = lines_split_by_direction(lines_valid_fld, lines_valid_hor, lines_valid_ver)
+    lines_valid_hor, lines_valid_ver = lines_split_by_direction(lines_valid_text_box, lines_valid_hor, lines_valid_ver)
+    if _debug:
+        print("lines_valid_hor : ", lines_valid_hor)
+        print("lines_valid_ver : ", lines_valid_ver)
+        drawn_img = img2.copy()
+        for line in lines_valid_hor:
+            cv2.line(drawn_img, tuple(line[0][:2]), tuple(line[0][2:4]), (255, 0, 0), 2)
+        for line in lines_valid_ver:
+            cv2.line(drawn_img, tuple(line[0][:2]), tuple(line[0][2:4]), (0, 255, 0), 2)
+        cv2.imwrite(os.path.join(_out_dir, _img_base_name + '.33.lines_hor_ver.png'), drawn_img)
+
+    # 4 估算直线变化
+    lt, rt, rb, lb = rectify_img2(img2, boxes2, lines_valid_hor, lines_valid_ver)
+    # 5 找出主体区域
+    if None not in [lt, rt, rb, lb]:
+        pts1 = np.array([lt, rt, rb, lb])
+        line_t = line_seg.line_length(pts1[0, 0], pts1[0, 1], pts1[1, 0], pts1[1, 1])
+        line_b = line_seg.line_length(pts1[2, 0], pts1[2, 1], pts1[3, 0], pts1[3, 1])
+        line_l = line_seg.line_length(pts1[0, 0], pts1[0, 1], pts1[3, 0], pts1[3, 1])
+        line_r = line_seg.line_length(pts1[1, 0], pts1[1, 1], pts1[2, 0], pts1[2, 1])
+        size = [max(line_t, line_b), max(line_l, line_r)]
+        if max(line_t, line_b) / min(line_t, line_b) >= max(line_l, line_r) / min(line_l, line_r):
+            size[1] = round(size[1] * max(line_t, line_b) / min(line_t, line_b))
+        else:
+            size[0] = round(size[0] * max(line_l, line_r) / min(line_l, line_r))
+
+        pts1 = pts1.astype(np.float32)
+        pad1, pad2 = round(size[0] / 10), round(size[1] / 10)
+        size = (round(size[0] + 2 * pad1), round(size[1] + 2 * pad2))
+        pts2 = np.array([[pad1, pad2],
+                         [size[0] - pad1 - 1, pad2],
+                         [size[0] - pad1 - 1, size[1] - pad2 - 1],
+                         [pad1, size[1] - pad2 - 1]]).astype(np.float32)
+        print(pts1, pts1.shape, pts1.dtype)
+        print(pts2, pts2.shape, pts2.dtype)
+        M = cv2.getPerspectiveTransform(pts1, pts2)
+        img3 = cv2.warpPerspective(img2, M, size)
+        boxes3, elapse3 = text_detector(img3)
+        score3 = check_box_score(boxes3)
+        if _debug:
+            logger.debug("第三次裁剪:boxes3:{}, score3:{}".format(len(boxes3), score3))
+            new_filename = "{}.50-cut-{}.jpg".format(_img_base_name, int(score3))
+            cv2.imwrite(os.path.join(_out_dir, new_filename), utility.draw_text_det_res2(boxes3, img3))
+            print("boxes3 : {} {} {}".format(type(boxes3), boxes3.shape, boxes3))
 
 
 if __name__ == "__main__":

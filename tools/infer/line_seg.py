@@ -19,6 +19,39 @@ def get_cross_point(a1, b1, c1, a2, b2, c2):
     return round(x), round(y)
 
 
+def get_x_from_line(A, B, C, y):
+    if B == 0.0:
+        return -1.0 * C / A
+    elif A == 0.0:
+        return 0.0
+    return -1.0 * (B * y + C) / A
+
+
+def get_y_from_line(A, B, C, x):
+    if A == 0.0:
+        return -1.0 * C / B
+    elif B == 0.0:
+        return 0.0
+    return -1.0 * (A * x + C) / B
+
+
+def get_line_vertical(A, B, C, pt):
+    px, py = pt[0], pt[1]
+    if A == 0:
+        return -1 * B, 0, B * px
+    elif B == 0:
+        return 0, -1 * A, A * py
+    else:
+        return -1 * B, A, B * px - A * py
+    return 0, 0, 0
+
+
+def get_cross_point_by_param(a1, b1, c1, a2, b2, c2):
+    x = (b1 * c2 - b2 * c1) / (a1 * b2 - a2 * b1)
+    y = (a2 * c1 - a1 * c2) / (a1 * b2 - a2 * b1)
+    return int(round(x)), int(round(y))
+
+
 class LineSeg:
     def __init__(self, x1, y1, x2, y2):
         self.x1, self.y1 = x1, y1
@@ -75,5 +108,18 @@ class LineSeg:
             return self.x1, self.y1
         return self.x2, self.y2
 
+    def get_x(self, y):
+        if self.B == 0.0:
+            return -1.0 * self.C / self.A
+        elif self.A == 0.0:
+            return 0.0
+        return -1.0 * (self.B * y + self.C) / self.A
+
+    def get_y(self, x):
+        if self.A == 0.0:
+            return -1.0 * self.C / self.B
+        elif self.B == 0.0:
+            return 0.0
+        return -1.0 * (self.A * x + self.C) / self.B
 
 
