@@ -352,12 +352,10 @@ def calibrate_img2(text_detector, img):
         y2 = min(y2 + int((y2 - y1) / 10), img2.shape[0] - 1)
         new_filename = "{}.21-rotate.{}.{}.jpg".format(_img_base_name, int(rotate_angle2), int(score2))
         cv2.imwrite(os.path.join(_out_dir, new_filename), utility.draw_text_det_res2(boxes2, img2)[y1:y2, x1:x2])
-    if len(boxes2) < 4:
-        if score2 >= score1:
-            return img2, boxes2, theta2, score2, img_box2
-        elif score1 > score2:
-            return img1, boxes1, theta1, score1, img_box1
+    return img2, boxes2, theta2, score2, img_box2
 
+
+def calibrate_img3_lines(img2, boxes2, score2):
     # 3 找出文本框的有效直线
     lines_valid_text_box, box_height_avg = get_lines_by_box(boxes2)
     if _debug:
@@ -417,6 +415,9 @@ def calibrate_img2(text_detector, img):
             new_filename = "{}.50-cut-{}.jpg".format(_img_base_name, int(score3))
             cv2.imwrite(os.path.join(_out_dir, new_filename), utility.draw_text_det_res2(boxes3, img3))
             print("boxes3 : {} {} {}".format(type(boxes3), boxes3.shape, boxes3))
+        return img3, boxes3, score3
+    else:
+        return img2, boxes2, score2
 
 
 if __name__ == "__main__":
@@ -444,7 +445,9 @@ if __name__ == "__main__":
         elif h > 2000 and h >= w:
             img = cv2.resize(img, (round(2000 * w / h), 2000))
         print(img.shape)
-        calibrate_img2(text_detector, img)
+        img2, boxes2, theta2, score2, img_box2 = calibrate_img2(text_detector, img)
+        if len(boxes2) > 2:
+            calibrate_img3_lines(img2, boxes2, score2)
         # break
     if count > 1:
         print("Avg Time:", total_time / (count - 1))
