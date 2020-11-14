@@ -29,7 +29,7 @@ from ppocr.postprocess.sast_postprocess import SASTPostProcess
 import tools.infer.predict_det as predict_det
 from calibrate_image import get_rotated_size, check_box_score, get_box_length, get_rotated_radian
 # from calibrate_image import rotate_image, rotate_first
-_debug = True
+_debug = False
 _out_dir = './inference_results'
 _img_base_name = ''
 
@@ -225,6 +225,10 @@ def rectify_img2(img, boxes, lines_valid_hor, lines_valid_ver):
     print("斜率统计结果：")
     print(slope_hor_list)
     print(slope_ver_list)
+    arr = np.array(slope_hor_list)
+    print(arr[np.argsort(arr[:, 0])])
+    print("lineseg_center_cross_y_max: ", lineseg_center_cross_y_max)
+    print("lineseg_center_cross_y_min: ", lineseg_center_cross_y_min)
 
     line_top_left, line_top_right = None, None
     line_bot_left, line_bot_right = None, None
@@ -233,17 +237,18 @@ def rectify_img2(img, boxes, lines_valid_hor, lines_valid_ver):
     line_right_top, line_right_bot = None, None
     if len(slope_hor_list) > 2:
         # theta_hor_line = cv2.fitLine(np.array(theta_hor), cv2.DIST_L1, 0, 0.01, 0.01)
-        slope_hor_line = cv2.fitLine(np.array(slope_hor_list), cv2.DIST_L2, 0, 0.01, 0.01)
+        slope_hor_line = cv2.fitLine(np.array(slope_hor_list), cv2.DIST_L1, 0, 0.01, 0.01)
         # print('theta_hor_line:', theta_hor_line)
         print('slope_hor_line : ', slope_hor_line)
         line_top_pt = (w / 2, lineseg_center_cross_y_min)
         line_bottom_pt = (w / 2, lineseg_center_cross_y_max)
         line_middle_pt = (w / 2, (lineseg_center_cross_y_min + lineseg_center_cross_y_max) / 2)
-        print(line_top_pt, line_bottom_pt)
+        print("line_top_pt: ", line_top_pt, "line_bottom_pt: ", line_bottom_pt)
         # print(theta_top, theta_bot)
         slope_top = line_infer(slope_hor_line, line_top_pt[1]) / 10000
         slope_bot = line_infer(slope_hor_line, line_bottom_pt[1]) / 10000
         slope_mid = (slope_top + slope_bot) / 2
+        print("slope_top: {}, slope_bot: {}, slope_mid: {}".format(slope_top, slope_bot, slope_mid))
         line_top = (-1.0 * slope_top, 1.0, w / 2 * slope_top - line_top_pt[1])
         line_bottom = (-1.0 * slope_bot, 1.0, w / 2 * slope_bot - line_bottom_pt[1])
         line_middle = (-1.0 * slope_mid, 1.0, w / 2 * slope_mid - line_middle_pt[1])
@@ -253,6 +258,9 @@ def rectify_img2(img, boxes, lines_valid_hor, lines_valid_ver):
         line_bot_right = LineSeg(w - 1, 0, w - 1, h - 1).get_cross_point_by_param(*line_bottom)
         line_middle_left = LineSeg(0, 0, 0, h - 1).get_cross_point_by_param(*line_middle)
         line_middle_right = LineSeg(w - 1, 0, w - 1, h - 1).get_cross_point_by_param(*line_middle)
+        print("line_top:{}, {}".format(line_top_left, line_top_right))
+        print("line_mid:{}, {}".format(line_middle_left, line_middle_right))
+        print("line_bot:{}, {}".format(line_bot_left, line_bot_right))
         text_min_x, text_max_x = np.min(boxes[:, :, 0]), np.max(boxes[:, :, 0])
         line_middle_left_pt = (text_min_x, get_y_from_line(*line_middle, text_min_x))
         line_middle_right_pt = (text_max_x, get_y_from_line(*line_middle, text_max_x))
@@ -291,7 +299,7 @@ def rectify_img2(img, boxes, lines_valid_hor, lines_valid_ver):
         print('slope_top, slope_bot : ')
         print(slope_top, slope_bot)
         if line_top_left is not None and line_top_right is not None:
-            cv2.line(drawn_img, line_top_left, line_top_right, (255, 0, 0), 2)
+            cv2.line(drawn_img, line_top_left, line_top_right, (255, 0, 0), 2)              # 上边界线
         if line_bot_left is not None and line_bot_right is not None:
             cv2.line(drawn_img, line_bot_left, line_bot_right, (0, 255, 0), 2)
             if line_top_left is not None and line_top_right is not None:
@@ -355,7 +363,7 @@ def calibrate_img2(text_detector, img):
     return img2, boxes2, theta2, score2, img_box2
 
 
-def calibrate_img3_lines(img2, boxes2, score2):
+def calibrate_img3_lines(img2, boxes2):
     # 3 找出文本框的有效直线
     lines_valid_text_box, box_height_avg = get_lines_by_box(boxes2)
     if _debug:
@@ -408,19 +416,15 @@ def calibrate_img3_lines(img2, boxes2, score2):
         print(pts2, pts2.shape, pts2.dtype)
         M = cv2.getPerspectiveTransform(pts1, pts2)
         img3 = cv2.warpPerspective(img2, M, size)
-        boxes3, elapse3 = text_detector(img3)
-        score3 = check_box_score(boxes3)
-        if _debug:
-            logger.debug("第三次裁剪:boxes3:{}, score3:{}".format(len(boxes3), score3))
-            new_filename = "{}.50-cut-{}.jpg".format(_img_base_name, int(score3))
-            cv2.imwrite(os.path.join(_out_dir, new_filename), utility.draw_text_det_res2(boxes3, img3))
-            print("boxes3 : {} {} {}".format(type(boxes3), boxes3.shape, boxes3))
-        return img3, boxes3, score3
+        br = cv2.boundingRect(cv2.cvtColor(img3, cv2.COLOR_BGR2GRAY))
+        img3 = img3[br[1]:br[1] + br[3], br[0]:br[0] + br[2], :]
+        return img3
     else:
-        return img2, boxes2, score2
+        return img2
 
 
 if __name__ == "__main__":
+    _debug = True
     args = utility.parse_args()
     image_file_list = get_image_file_list(args.image_dir)
     text_detector = predict_det.TextDetector(args)
@@ -445,9 +449,18 @@ if __name__ == "__main__":
         elif h > 2000 and h >= w:
             img = cv2.resize(img, (round(2000 * w / h), 2000))
         print(img.shape)
-        img2, boxes2, theta2, score2, img_box2 = calibrate_img2(text_detector, img)
+        # img2, boxes2, theta2, score2, img_box2 = calibrate_img2(text_detector, img)
+        img2 = img
+        boxes2, elapse2 = text_detector(img2)
         if len(boxes2) > 2:
-            calibrate_img3_lines(img2, boxes2, score2)
+            img3 = calibrate_img3_lines(img2, boxes2)
+            boxes3, elapse3 = text_detector(img3)
+            score3 = check_box_score(boxes3)
+            if _debug:
+                logger.debug("第三次裁剪:boxes3:{}, score3:{}".format(len(boxes3), score3))
+                new_filename = "{}.50-cut-{}.jpg".format(_img_base_name, int(score3))
+                cv2.imwrite(os.path.join(_out_dir, new_filename), utility.draw_text_det_res2(boxes3, img3))
+                print("boxes3 : {} {} {}".format(type(boxes3), boxes3.shape, boxes3))
         # break
     if count > 1:
         print("Avg Time:", total_time / (count - 1))
