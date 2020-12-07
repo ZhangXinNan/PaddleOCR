@@ -9,48 +9,42 @@
 
 ## PaddleOCR常见问题汇总(持续更新)
 
-* [近期更新（2020.11.16）](#近期更新)
+* [近期更新（2020.11.30）](#近期更新)
 * [【精选】OCR精选10个问题](#OCR精选10个问题)
-* [【理论篇】OCR通用27个问题](#OCR通用问题)
+* [【理论篇】OCR通用29个问题](#OCR通用问题)
   * [基础知识7题](#基础知识)
-  * [数据集5题](#数据集)
-  * [模型训练调优7题](#模型训练调优)
-  * [预测部署8题](#预测部署)
-* [【实战篇】PaddleOCR实战72个问题](#PaddleOCR实战问题)
-  * [使用咨询19题](#使用咨询)
-  * [数据集10题](#数据集)
-  * [模型训练调优21题](#模型训练调优)
-  * [预测部署21题](#预测部署)
+  * [数据集7题](#数据集2)
+  * [模型训练调优7题](#模型训练调优2)
+  * [预测部署8题](#预测部署2)
+* [【实战篇】PaddleOCR实战80个问题](#PaddleOCR实战问题)
+  * [使用咨询20题](#使用咨询)
+  * [数据集17题](#数据集3)
+  * [模型训练调优21题](#模型训练调优3)
+  * [预测部署22题](#预测部署3)
 
 
 <a name="近期更新"></a>
-## 近期更新（2020.11.16）
+## 近期更新（2020.11.30）
 
-#### Q3.4.20：文档场景中，使用DB模型会出现整行漏检的情况应该怎么解决？
-**A**：可以在预测时调小 det_db_box_thresh 阈值，默认为0.5, 可调小至0.3观察效果。
+#### Q3.2.15: 文本标注工具PPOCRLabel有什么特色？
 
-#### Q2.1.7：类似泰语这样的小语种，部分字会占用两个字符甚至三个字符，请问如何制作字典。
+**A**: PPOCRLabel是一个半自动文本标注工具，它使用基于PPOCR的中英文OCR模型，预先预测文本检测和识别结果，然后用户对上述结果进行校验和修正就行，大大提高用户的标注效率。同时导出的标注结果直接适配PPOCR训练所需要的数据格式，
 
-**A**：处理字符的时候，把多字符的当作一个字就行，字典中每行是一个字。
+#### Q3.2.16: 文本标注工具PPOCRLabel，可以更换模型吗？
 
-#### Q2.3.7：识别训练时，训练集精度已经到达90了，但验证集精度一直在70，涨不上去怎么办？
+**A**: PPOCRLabel中OCR部署方式采用的基于pip安装whl包快速推理，可以参考相关文档更换模型路径，进行特定任务的标注适配。基于pip安装whl包快速推理的文档如下，https://github.com/PaddlePaddle/PaddleOCR/blob/develop/doc/doc_ch/whl.md。
 
-**A**：训练集精度90，测试集70多的话，应该是过拟合了，有两个可尝试的方法：
+#### Q3.2.17: 文本标注工具PPOCRLabel支持的运行环境有哪些？
 
-（1）加入更多的增广方式或者调大增广prob的[概率](https://github.com/PaddlePaddle/PaddleOCR/blob/a501603d54ff5513fc4fc760319472e59da25424/ppocr/data/rec/img_tools.py#L307)，默认为0.4。
+**A**: PPOCRLabel可运行于Linux、Windows、MacOS等多种系统。操作步骤可以参考文档，https://github.com/PaddlePaddle/PaddleOCR/blob/develop/PPOCRLabel/README.md
 
-（2）调大系统的[l2 dcay值](https://github.com/PaddlePaddle/PaddleOCR/blob/a501603d54ff5513fc4fc760319472e59da25424/configs/rec/ch_ppocr_v1.1/rec_chinese_lite_train_v1.1.yml#L47)
+#### Q2.2.6: 当训练数据量少时，如何获取更多的数据？
 
+**A**: 当训练数据量少时，可以尝试以下三种方式获取更多的数据：（1）人工采集更多的训练数据，最直接也是最有效的方式。（2）基于PIL和opencv基本图像处理或者变换。例如PIL中ImageFont, Image, ImageDraw三个模块将文字写到背景中，opencv的旋转仿射变换，高斯滤波等。（3）利用数据生成算法合成数据，例如pix2pix等算法。
 
-#### Q3.4.21：自己训练的det模型，在同一张图片上，inference模型与eval模型结果差别很大，为什么？
+#### Q2.2.7: 论文《Editing Text in the Wild》中文本合成方法SRNet有什么特点？
 
-**A**：这是由于图片预处理不同造成的。如果训练的det模型图片输入并不是默认的shape[600, 600]，
-eval的程序中图片预处理方式与train时一致（由xxx_reader.yml中的test_image_shape参数决定缩放大小）
-但predict_eval.py中的图片预处理方式由程序里的preprocess_params决定，最好不要传入max_side_len，而是传入和训练时一样大小的test_image_shape。
-
-#### Q3.4.22：训练ccpd车牌数据集，训练集准确率高，测试均是错误的，这是什么原因？
-
-**A**：这是因为训练时将shape修改为[3, 70, 220], 预测时对图片resize，会把高度压缩至32，影响测试结果。注释掉[resize代码](https://github.com/PaddlePaddle/PaddleOCR/blob/ed4313d611b7708a7763d4612f00cb7f318a0e1f/tools/infer/predict_rec.py#L54-L55)可以解决问题。
+**A**: SRNet是借鉴GAN中图像到图像转换、风格迁移的想法合成文本数据。不同于通用GAN的方法只选择一个分支，SRNet将文本合成任务分解为三个简单的子模块，提升合成数据的效果。这三个子模块为不带背景的文本风格迁移模块、背景抽取模块和融合模块。PaddleOCR计划将在2020年12月中旬开源基于SRNet的实用模型。
 
 
 <a name="OCR精选10个问题"></a>
@@ -142,6 +136,8 @@ eval的程序中图片预处理方式与train时一致（由xxx_reader.yml中的
 
 <a name="OCR通用问题"></a>
 ## 【理论篇】OCR通用问题
+
+<a name="基础知识"></a>
 ### 基础知识
 
 #### Q2.1.1：CRNN能否识别两行的文字?还是说必须一行？
@@ -170,6 +166,7 @@ eval的程序中图片预处理方式与train时一致（由xxx_reader.yml中的
 
 **A**：处理字符的时候，把多字符的当作一个字就行，字典中每行是一个字。
 
+<a name="数据集2"></a>
 ### 数据集
 
 #### Q2.2.1：支持空格的模型，标注数据的时候是不是要标注空格？中间几个空格都要标注出来么？
@@ -192,7 +189,15 @@ eval的程序中图片预处理方式与train时一致（由xxx_reader.yml中的
 
 **A**：使用基于分割的方法，如DB，检测密集文本行时，最好收集一批数据进行训练，并且在训练时，并将生成二值图像的shrink_ratio参数调小一些。
 
+#### Q2.2.6: 当训练数据量少时，如何获取更多的数据？
 
+**A**: 当训练数据量少时，可以尝试以下三种方式获取更多的数据：（1）人工采集更多的训练数据，最直接也是最有效的方式。（2）基于PIL和opencv基本图像处理或者变换。例如PIL中ImageFont, Image, ImageDraw三个模块将文字写到背景中，opencv的旋转仿射变换，高斯滤波等。（3）利用数据生成算法合成数据，例如pix2pix等算法。
+
+#### Q2.2.7: 论文《Editing Text in the Wild》中文本合成方法SRNet有什么特点？
+
+**A**: SRNet是借鉴GAN中图像到图像转换、风格迁移的想法合成文本数据。不同于通用GAN的方法只选择一个分支，SRNet将文本合成任务分解为三个简单的子模块，提升合成数据的效果。这三个子模块为不带背景的文本风格迁移模块、背景抽取模块和融合模块。PaddleOCR计划将在2020年12月中旬开源基于SRNet的实用模型。
+
+<a name="模型训练调优2"></a>
 ### 模型训练调优
 
 #### Q2.3.1：如何更换文本检测/识别的backbone？
@@ -234,6 +239,7 @@ eval的程序中图片预处理方式与train时一致（由xxx_reader.yml中的
 
 （2）调大系统的[l2 dcay值](https://github.com/PaddlePaddle/PaddleOCR/blob/a501603d54ff5513fc4fc760319472e59da25424/configs/rec/ch_ppocr_v1.1/rec_chinese_lite_train_v1.1.yml#L47)
 
+<a name="预测部署2"></a>
 ### 预测部署
 
 #### Q2.4.1：请问对于图片中的密集文字，有什么好的处理办法吗？
@@ -281,6 +287,7 @@ eval的程序中图片预处理方式与train时一致（由xxx_reader.yml中的
 <a name="PaddleOCR实战问题"></a>
 ## 【实战篇】PaddleOCR实战问题
 
+<a name="使用咨询"></a>
 ### 使用咨询
 
 #### Q3.1.1：OSError： [WinError 126] 找不到指定的模块。mac pro python 3.4 shapely import 问题
@@ -373,7 +380,12 @@ eval的程序中图片预处理方式与train时一致（由xxx_reader.yml中的
 
 **A**：这个一般是因为标注文件格式有问题或者是标注文件中的图片路径有问题导致的，在[tools/train.py](../../tools/train.py)文件中有一个`test_reader`的函数，基于这个去检查一下数据的格式以及标注，确认没问题之后再进行模型训练。
 
+#### Q3.1.20：PaddleOCR与百度的其他OCR产品有什么区别？
 
+**A**：PaddleOCR主要聚焦通用ocr，如果有垂类需求，您可以用PaddleOCR+垂类数据自己训练；
+如果缺少带标注的数据，或者不想投入研发成本，建议直接调用开放的API，开放的API覆盖了目前比较常见的一些垂类。
+
+<a name="数据集3"></a>
 ### 数据集
 
 #### Q3.2.1：如何制作PaddleOCR支持的数据格式
@@ -428,11 +440,43 @@ eval的程序中图片预处理方式与train时一致（由xxx_reader.yml中的
 **A**：可以主要参考可视化效果，通用模型更倾向于检测一整行文字，轻量级可能会有一行文字被分成两段检测的情况，不是数量越多，效果就越好。
 
 
-#### Q3.2.10： crnn+ctc模型训练所用的垂直文本（旋转至水平方向）是如何生成的？
+#### Q3.2.10：crnn+ctc模型训练所用的垂直文本（旋转至水平方向）是如何生成的？
 
 **A**：方法与合成水平方向文字一致，只是将字体替换成了垂直字体。
 
+#### Q3.2.11：有哪些标注工具可以标注OCR数据集？
 
+**A**：您可以参考：https://github.com/PaddlePaddle/PaddleOCR/blob/develop/doc/doc_en/data_annotation_en.md。
+我们计划推出高效标注OCR数据的标注工具，请您持续关注PaddleOCR的近期更新。
+
+#### Q3.2.12：一些特殊场景的数据识别效果差，但是数据量很少，不够用来finetune怎么办？
+
+**A**：您可以合成一些接近使用场景的数据用于训练。
+我们计划推出基于特定场景的文本数据合成工具，请您持续关注PaddleOCR的近期更新。
+
+#### Q3.2.13：特殊字符（例如一些标点符号）识别效果不好怎么办？
+
+**A**：首先请您确认要识别的特殊字符是否在字典中。
+如果字符在已经字典中但效果依然不好，可能是由于识别数据较少导致的，您可以增加相应数据finetune模型。
+
+#### Q3.2.14：PaddleOCR可以识别灰度图吗？
+
+**A**：PaddleOCR的模型均为三通道输入。如果您想使用灰度图作为输入，建议直接用3通道的模式读入灰度图，
+或者将单通道图像转换为三通道图像再识别。例如，opencv的cvtColor函数就可以将灰度图转换为RGB三通道模式。
+
+#### Q3.2.15: 文本标注工具PPOCRLabel有什么特色？
+
+**A**: PPOCRLabel是一个半自动文本标注工具，它使用基于PPOCR的中英文OCR模型，预先预测文本检测和识别结果，然后用户对上述结果进行校验和修正就行，大大提高用户的标注效率。同时导出的标注结果直接适配PPOCR训练所需要的数据格式，
+
+#### Q3.2.16: 文本标注工具PPOCRLabel，可以更换模型吗？
+
+**A**: PPOCRLabel中OCR部署方式采用的基于pip安装whl包快速推理，可以参考相关文档更换模型路径，进行特定任务的标注适配。基于pip安装whl包快速推理的文档如下，https://github.com/PaddlePaddle/PaddleOCR/blob/develop/doc/doc_ch/whl.md。
+
+#### Q3.2.17: 文本标注工具PPOCRLabel支持的运行环境有哪些？
+
+**A**: PPOCRLabel可运行于Linux、Windows、MacOS等多种系统。操作步骤可以参考文档，https://github.com/PaddlePaddle/PaddleOCR/blob/develop/PPOCRLabel/README.md
+
+<a name="模型训练调优3"></a>
 ### 模型训练调优
 
 #### Q3.3.1：文本长度超过25，应该怎么处理？
@@ -550,7 +594,7 @@ return paddle.reader.multiprocess_reader(readers, False, queue_size=320)
 
 （3）在训练的时候，文本长度超过25的训练图像都会被丢弃，因此需要看下真正参与训练的图像有多少，太少的话也容易过拟合。
 
-
+<a name="预测部署3"></a>
 ### 预测部署
 
 #### Q3.4.1：如何pip安装opt模型转换工具？
