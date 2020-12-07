@@ -15,6 +15,9 @@ import os
 import sys
 __dir__ = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(__dir__)
+import random
+import line_seg
+from line_seg import line_length as length
 sys.path.append(os.path.abspath(os.path.join(__dir__, '../..')))
 
 import cv2
@@ -101,10 +104,6 @@ def get_rotated_radian(text_boxes):
     return top_theta_list[top_theta_indies[len(top_theta_list)//2]]
 
 
-def length(x1, y1, x2, y2):
-    return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-
-
 def get_box_length(box):
     t = length(box[0, 0], box[0, 1], box[1, 0], box[1, 1])
     r = length(box[1, 0], box[1, 1], box[2, 0], box[2, 1])
@@ -170,8 +169,6 @@ def order_points_clockwise(pts):
     return np.array([tl, tr, br, bl], dtype="float32")
 
 
-import random
-import line_seg
 def rectify_img(img, boxes, debug=False):
     # 画文本框到图中。
     img_lines = img.copy()
@@ -325,6 +322,16 @@ def calibrate_img(text_detector, img, image_file, out_dir, debug=False):
         cv2.imwrite(os.path.join(draw_img_save, "{}.4-rectify.{}.jpg".format(img_name_pure, round(score4))),
                     utility.draw_text_det_res2(boxes4, img4))
     return img2, boxes2, theta2
+
+
+def flip_boxes(text_boxes, w, h):
+    box_list = []
+    for box in text_boxes:
+        box_list.append([w - box[4] - 1, h - box[5] - 1,
+                         w - box[6] - 1, h - box[7] - 1,
+                         w - box[0] - 1, h - box[1] - 1,
+                         w - box[2] - 1, h - box[3] - 1])
+    return box_list
 
 
 if __name__ == "__main__":
