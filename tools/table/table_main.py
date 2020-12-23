@@ -9,6 +9,13 @@ from line_seg import line_length
 _CHAR_SIZE = 32
 
 
+def norm_img(img):
+    img = np.absolute(img)
+    img = (img - img.min()) * 255 / (img.max() - img.min())
+    img = img.astype(np.uint8)
+    return img
+
+
 def draw_lines(img, lines_hor, lines_ver):
     img_show = img.copy()
     for line in lines_hor:
@@ -21,6 +28,30 @@ def draw_lines(img, lines_hor, lines_ver):
         cv2.line(img_show, (x1, y1), (x2, y2), (0, 255, 0), 3)
     img_show = cv2.addWeighted(img, 0.5, img_show, 0.5, 0)
     return img_show
+
+
+def check_lines(lines):
+    lines_valid = []
+
+    for i, line in enumerate(lines):
+        x1, y1, x2, y2 = line[0].astype(np.int)
+        # 大于文本高度1.5倍的才算有效的直线
+        # if img_mask is not None:
+        if line_length(x1, y1, x2, y2) > _CHAR_SIZE * 1.5:
+            lines_valid.append(lines[i])
+    return lines_valid
+
+
+def sobel(img):
+    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=5)
+    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=5)
+    print(sobelx.min(), sobelx.max())
+    print(sobely.min(), sobely.max())
+    sobelx = norm_img(sobelx)
+    sobely = norm_img(sobely)
+    sobel_max = np.maximum(sobelx, sobely)
+
+    return sobelx, sobely, sobel_max
 
 
 def get_args():
@@ -49,22 +80,19 @@ def main(args):
             img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             img_gaus = cv2.GaussianBlur(img_gray, (5, 5), 0)
 
+            img_sobel_x, img_sobel_y, img_sobel = sobel(img_gaus)
+            # cv2.imwrite(os.path.join(args.out_dir, filename + '.sobel.jpg'), img_sobel)
+            cv2.imwrite(os.path.join(args.out_dir, filename + '.sobelx.jpg'), img_sobel_x)
+            cv2.imwrite(os.path.join(args.out_dir, filename + '.sobely.jpg'), img_sobel_y)
+
             fld = cv2.ximgproc.createFastLineDetector()
-            lines = fld.detect(img_gaus)
-            print(lines)
-            # lines_valid = []
-            lines_valid_hor, lines_valid_ver = [], []
-            for i, line in enumerate(lines):
-                line = line[0].astype(np.int)
-                x1, y1, x2, y2 = line[0], line[1], line[2], line[3]
-                # 大于文本高度1.5倍的才算有效的直线
-                # if img_mask is not None:
-                if line_length(x1, y1, x2, y2) > _CHAR_SIZE * 1.5:
-                    # lines_valid.append(lines[i])
-                    if abs(x1 - x2) > 10 * abs(y1 - y2):
-                        lines_valid_hor.append(lines[i])
-                    elif abs(y1 - y2) > 10 * abs(x1 - x2):
-                        lines_valid_ver.append(lines[i])
+            # lines = fld.detect(img_gaus)
+            lines_ver = fld.detect(img_sobel_x)
+            lines_hor = fld.detect(img_sobel_y)
+
+            lines_valid_hor = check_lines(lines_hor)
+            lines_valid_ver = check_lines(lines_ver)
+
             img_show_lines = draw_lines(img, lines_valid_hor, lines_valid_ver)
             cv2.imwrite(os.path.join(args.out_dir, filename + '.lines.jpg'), img_show_lines)
 
