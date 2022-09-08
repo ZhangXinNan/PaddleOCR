@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import random
 import ast
-from PIL import Image
+
+import cv2
+from PIL import Image, ImageDraw
 import numpy as np
 from tools.infer.utility import draw_ocr_box_txt, str2bool, init_args as infer_args
 
@@ -109,8 +112,18 @@ def draw_structure_result(image, result, font_path):
         image = Image.fromarray(image)
     boxes, txts, scores = [], [], []
     for region in result:
-        if region['type'] == 'table':
-            pass
+        x0, y0 = 0, 0
+        if 'bbox' in region:
+            x0, y0 = region['bbox'][:2]
+        if 'table' == region['type']:
+            if 'res' in region and 'boxes' in region['res'] and 'rec_res' in region['res']:
+                for box, (txt, score) in zip(region['res']['boxes'], region['res']['rec_res']):
+                    x1, y1 = x0 + min(box[0], box[2]), y0 + min(box[1], box[3])
+                    x2, y2 = x0 + max(box[0], box[2]), y0 + max(box[1], box[3])
+                    box_new = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]])
+                    boxes.append(box_new)
+                    txts.append(txt)
+                    scores.append(score)
         else:
             for text_result in region['res']:
                 boxes.append(np.array(text_result['text_region']))
@@ -118,4 +131,20 @@ def draw_structure_result(image, result, font_path):
                 scores.append(text_result['confidence'])
     im_show = draw_ocr_box_txt(
         image, boxes, txts, scores, font_path=font_path, drop_score=0)
+    # draw table
+    h, w = image.height, image.width
+    img_right = im_show[:, w:, :].copy()
+    for region in result:
+        x0, y0 = 0, 0
+        if 'bbox' in region:
+            x0, y0 = region['bbox'][:2]
+        if 'table' == region['type'] and 'cell_bbox' in region['res']:
+            for x1, y1, x2, y2, x3, y3, x4, y4 in region['res']['cell_bbox']:
+                x1, x2, x3, x4 = x1 + x0, x2 + x0, x3 + x0, x4 + x0
+                y1, y2, y3, y4 = y1 + y0, y2 + y0, y3 + y0, y4 + y0
+                box = np.array([[x1, y1], [x2, y2], [x3, y3], [x4, y4]], dtype=np.int32)
+                color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+                cv2.fillPoly(img_right, pts=[box], color=color)
+    img_right = cv2.addWeighted(im_show[:, w:, :].copy(), 0.5, img_right, 0.5, 0)
+    im_show[:, w:, :] = img_right
     return im_show

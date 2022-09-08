@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import copy
 import os
 import sys
 import subprocess
@@ -190,7 +190,12 @@ def save_structure_res(res, save_folder, img_name, img_idx=0):
             encoding='utf8') as f:
         for region in res_cp:
             roi_img = region.pop('img')
-            f.write('{}\n'.format(json.dumps(region)))
+            if 'table' == region['type']:
+                region_new = copy.deepcopy(region)
+                region_new['res']['boxes'] = region['res']['boxes'].tolist()
+                f.write('{}\n'.format(json.dumps(region_new)))
+            else:
+                f.write('{}\n'.format(json.dumps(region)))
 
             if region['type'].lower() == 'table' and len(region[
                     'res']) > 0 and 'html' in region['res']:
@@ -233,7 +238,7 @@ def main(args):
 
         all_res = []
         for index, img in enumerate(imgs):
-            res, time_dict = structure_sys(img, img_idx=index)
+            res, time_dict = structure_sys(img, return_ocr_result_in_table=True, img_idx=index)
             if structure_sys.mode == 'structure' and res != []:
                 save_structure_res(res, save_folder, img_name, index)
                 draw_img = draw_structure_result(img, res, args.vis_font_path)
